@@ -6,8 +6,8 @@ library(purrr)
 #TESTS' STATISTICS
 
 #Kolmogorov_Smirnov test statistic
-ks <- function(x){
-  return(ks.test(x, 'pnorm', mean(x), sd(x))$statistic)
+ks <- function(x, x_mean = 0, x_sd = 1){
+  return(ks.test(x, 'pnorm', mean = x_mean, sd = x_sd)$statistic)
 }
 
 #Shapiro-Wilk test statistic
@@ -28,67 +28,45 @@ ad <- function(x){
 }
 
 
-# #DISTRIBUTIONS' SAMPLES
-# 
-# #Uniform
-# u_sample <- function(n, a, b){
-#   return(runif(n, a, b))
-# }
-# 
-# #Beta
-# beta_sample <- function(n, a, b){
-#   return(rbeta(n, a, b))
-# }
-# 
-# #t
-# t_sample <- function(n, df){
-#   return(rt(n, df))
-# }
-# 
-# #Laplace
-# laplace_sample <- function(n){
-#   return(rlaplace(n))
-# }
-# 
-# #Chi2
-# chi2_sample <- function(n, df){
-#   return(rchisq(n, df))
-# }
-# 
-# #Gamma
-# gamma_sample <- function(n, shape, scale){
-#   return(rgamma(n, shape = shape, scale = scale))
-# }
-
-
-#Finds critical value of test based on
-#50 000 samples of 100 independent observations
-test_power <- function(test_fun, alpha, N = 5000, M = 500){
+#Finds power (p) of test (test_fun), according to sample size and confidence level
+test_power <- function(test_fun, alpha, sample, param1, param2, N = 50, M = 100){
   test_name <- as.character(substitute(test_fun))
   p <- c()
   n <- c(10, 20, 30, 50, 100, 200, 300, 400, 500, 1000, 2000)
   crits <- c()
-  for(i in n){
-    X <- replicate(N, rnorm(i, mean = 0, sd = 1))
-    dim(X) <- c(i, N)
+  for(i in 1:length(n)){
+    #Tests' statistics vector - T
+    X <- replicate(N, rnorm(n[i], mean = 0, sd = 1))
+    dim(X) <- c(n[i], N)
     T <- apply(X, 2, test_fun)
-    
+    #Finding critical value for each sample length 
     if(test_name == 'sw'){
       crit <- quantile(sort(T), alpha)
-    }
-    else if(test_name == 'ks'){
-      crit <- quantile(sort(T), 1 - alpha/2)
     }
     else{
       crit <- quantile(sort(T), 1 - alpha)
     }
     crits <- append(crits, crit)
-  }
-
-  for(i in 1:length(n)){
-    Y <- replicate(M, rgamma(n[i], 1, 5))
+    #Finding test's statistic for tested distribution - D
+    if(missing(param2)){
+      Y <- replicate(M, sample(n[i], param1))
+    }
+    else{
+      Y <- replicate(M, sample(n[i], param1, param2))
+    }
     dim(Y) <- c(n[i], M)
-    D <- apply(Y, 2, test_fun)
+    if(test_name == 'ks'){
+      mean_i <- apply(Y, 2, mean)
+      x_mean <- mean(mean_i)
+      sd_i <- apply(Y, 2, sd)
+      x_sd <- mean(sd_i)
+      D <- apply(Y, 2, test_fun, x_mean, x_sd)
+    }
+    else{
+      D <- apply(Y, 2, test_fun)
+    }
+    #Check if D is in critical values set (Monte Carlo simulation)
+    #Calculate power - p
     if(test_name == 'sw'){
       d <- length(which(D < crits[i]))
     }
@@ -100,28 +78,60 @@ test_power <- function(test_fun, alpha, N = 5000, M = 500){
   return(p)
 }
 
-plot_powers <- function(alpha){
+
+plot_powers <- function(alpha, sample, param1, param2){
+  dist_name <- deparse(substitute(sample))
+  left <- toupper(substr(dist_name, start = 2, stop = 2))
+  right <- substr(dist_name, start = 3, nchar(dist_name))
+  dist_name <- paste(left, right, sep = '')
+  arg1_name <- deparse(substitute(param1))
+  arg2_name <- deparse(substitute(param2))
   n <- c(10, 20, 30, 50, 100, 200, 300, 400, 500, 1000, 2000)
-  p_sw <- test_power(sw, alpha)
-  p_ks <- test_power(ks, alpha)
-  p_lillie <- test_power(lillie, alpha)
-  p_ad <- test_power(ad, alpha)
+  if(missing(param2)){
+    p_sw <- test_power(sw, alpha, sample, param1)
+    p_ks <- test_power(ks, alpha, sample, param1)
+    p_lillie <- test_power(lillie, alpha, sample, param1)
+    p_ad <- test_power(ad, alpha, sample, param1)
+  }
+  else{
+    p_sw <- test_power(sw, alpha, sample, param1, param2)
+    p_ks <- test_power(ks, alpha, sample, param1, param2)
+    p_lillie <- test_power(lillie, alpha, sample, param1, param2)
+    p_ad <- test_power(ad, alpha, sample, param1, param2)
+  }
+  
   df <- data.frame(n, p_sw, p_ks, p_lillie, p_ad)
   
-  ggplot(df, aes(x = n)) + 
-    geom_line(y = p_sw, color = 'blue') +
+  fig <- ggplot(df, aes(x = n)) + 
+    geom_line(aes(y = p_sw, color = 'SW')) +
     geom_point(y = p_sw, shape = 18, color = 'blue') +
-    geom_line(y = p_ks, color = 'red') +
+    geom_line(aes(y = p_ks, color = 'KS')) +
     geom_point(y = p_ks, shape = 15, color = 'red') +
-    geom_line(y = p_lillie, color = 'green') +
+    geom_line(aes(y = p_lillie, color = 'LF')) +
     geom_point(y = p_lillie, shape = 17, color = 'green') +
-    geom_line(y = p_ad, color = 'purple') +
+    geom_line(aes(y = p_ad, color = 'AD')) +
     geom_point(y = p_ad, shape = 4, color = 'purple') +
     scale_x_continuous(breaks = c(10, 30, 100, 300, 1000, 2000),
                        trans = 'log2') +
-    scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
-    theme_classic() + 
-    labs(x = 'Sample size, n', y = 'Simulated Power')
+    scale_y_continuous(limits = c(0, 1)) +
+    scale_color_manual('', 
+      breaks = c('SW',
+                 'KS',
+                 'LF',
+                 'AD'),
+      values = c('blue', 'red', 'green', 'purple')) +
+    xlab(' ')
+    # theme_classic()
+  
+    if(missing(param2)){
+      fig + labs(title = paste(dist_name, '(', arg1_name, ')', sep = ''),
+           x = 'Sample size, n', y = 'Simulated Power')
+    }
+    else{
+      fig + labs(title = paste(dist_name, '(', arg1_name, ', ', arg2_name, ')', sep = ''),
+                 x = 'Sample size, n', y = 'Simulated Power')
+    }
+
 }
-plot_powers(0.05)
+plot_powers(0.05, rgamma, 1, 5)
 
