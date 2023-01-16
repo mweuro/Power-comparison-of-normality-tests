@@ -29,7 +29,7 @@ ad <- function(x){
 
 
 #Finds power (p) of test (test_fun), according to sample size and confidence level
-test_power <- function(test_fun, alpha, sample, param1, param2, N = 50, M = 100){
+test_power <- function(test_fun, alpha, sample, param1, param2, N = 50000, M = 10000){
   test_name <- as.character(substitute(test_fun))
   p <- c()
   n <- c(10, 20, 30, 50, 100, 200, 300, 400, 500, 1000, 2000)
@@ -121,7 +121,6 @@ plot_powers <- function(alpha, sample, param1, param2){
                  'AD'),
       values = c('blue', 'red', 'green', 'purple')) +
     xlab(' ')
-    # theme_classic()
   
     if(missing(param2)){
       fig + labs(title = paste(dist_name, '(', arg1_name, ')', sep = ''),
@@ -133,5 +132,8 @@ plot_powers <- function(alpha, sample, param1, param2){
     }
 
 }
+
+
+#Exemplary usage of function
 plot_powers(0.05, rgamma, 1, 5)
 
